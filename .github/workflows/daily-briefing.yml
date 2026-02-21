@@ -1,0 +1,34 @@
+name: Daily Family Briefing
+
+on:
+  # Runs at 11:30 AM UTC = 6:30 AM EST (Nov–Mar)
+  # Change to 10:30 AM UTC (1030) when Daylight Saving Time starts in March
+  schedule:
+    - cron: "30 11 * * *"
+
+  # Allow manual trigger from the GitHub Actions tab (useful for testing)
+  workflow_dispatch:
+
+jobs:
+  send-briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily briefing
+        env:
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: python daily_briefing.py
