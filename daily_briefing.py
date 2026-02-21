@@ -12,6 +12,7 @@ import os
 import sys
 import json
 import base64
+import re
 import datetime
 import pytz
 from pathlib import Path
@@ -43,15 +44,9 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
 ]
 
-# Keywords that flag an event as needing attention
-DECISION_KEYWORDS = [
-    "deadline", "due", "decision", "accept", "decline", "rsvp",
-    "registration", "last day", "confirm", "tryout", "tryouts",
-    "acceptance", "response required",
-]
-
 # Sutton events that mean John should cover evening logistics
-SUTTON_UNAVAILABLE_KEYWORDS = ["umd", "class", "work", "conference", "lunch", "meeting"]
+# Uses word-boundary regex so "work" won't match "workout"
+SUTTON_UNAVAILABLE_KEYWORDS = [r"\bumd\b", r"\bclass\b", r"\bwork\b", r"\bconference\b", r"\bmeeting\b"]
 
 # ─── AUTH: reads from env vars (GitHub Secrets) or local files ───────────────
 
@@ -172,14 +167,28 @@ def who_is_it(event):
     return "/".join(parts)
 
 
-def needs_decision(event):
-    text = (event.get("summary", "") + " " + event.get("description", "")).lower()
-    return any(k in text for k in DECISION_KEYWORDS)
-
-
-def sutton_unavailable(event):
-    s = event.get("summary", "").lower()
-    return event.get("_calendar") == "Sutton" and any(k in s for k in SUTTON_UNAVAILABLE_KEYWORDS)
+def sutton_unavailable(item):
+    """
+    Flag Sutton-calendar events that affect EVENING logistics.
+    Only triggers when:
+      1. Event is on Sutton's calendar
+      2. Summary matches a keyword via word-boundary regex
+      3. Event starts at 4 PM+ OR ends after 5 PM
+    """
+    event = item["event"]
+    summary = event.get("summary", "").lower()
+    if event.get("_calendar") != "Sutton":
+        return False
+    if not any(re.search(pat, summary) for pat in SUTTON_UNAVAILABLE_KEYWORDS):
+        return False
+    # All-day events on Sutton's calendar with a keyword are flagged
+    if item["all_day"]:
+        return True
+    # Evening-relevance filter
+    start_hour = item["start"].hour
+    end_hour = item["end"].hour
+    end_minute = item["end"].minute
+    return start_hour >= 16 or end_hour > 17 or (end_hour == 17 and end_minute > 0)
 
 
 def find_conflicts(day_events):
@@ -197,6 +206,64 @@ def find_conflicts(day_events):
                     conflicts.append((a, b))
     return conflicts
 
+# ─── SUMMARY BUILDER ─────────────────────────────────────────────────────────
+
+def build_summary_bullets(by_day, today_date, all_conflicts, sutton_away):
+    """Return up to 4 summary bullet strings for the quick-scan section."""
+    day_names = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    bullets = []
+
+    # 1. Today's snapshot — always shown
+    today_events = by_day.get(today_date, [])
+    timed_today = [e for e in today_events if not e["all_day"]]
+    if timed_today:
+        first = min(timed_today, key=lambda e: e["start"])
+        first_name = first["event"].get("summary", "(No title)")
+        first_time = fmt_time(first["start"])
+        n = len(timed_today)
+        bullets.append(
+            f"{n} event{'s' if n != 1 else ''} today "
+            f"&mdash; first up: <strong>{first_name}</strong> at {first_time}"
+        )
+    else:
+        bullets.append("No timed events scheduled today")
+
+    # 2. Logistics conflicts this week
+    if all_conflicts:
+        conflict_days = sorted(set(day for day, _, _ in all_conflicts))
+        day_labels = [day_names[d.weekday()] for d in conflict_days]
+        bullets.append(
+            f"🚗 Ride conflicts on <strong>{', '.join(day_labels)}</strong> "
+            f"&mdash; two kids need to be in different places at the same time"
+        )
+
+    # 3. Sutton unavailable — one bullet per evening
+    for item in sutton_away:
+        if len(bullets) >= 4:
+            break
+        ev = item["event"]
+        day_label = day_names[item["start"].weekday()]
+        summary = ev.get("summary", "")
+        bullets.append(
+            f"📚 Sutton unavailable {day_label} evening "
+            f"(<strong>{summary}</strong>) &mdash; John covers bedtime/logistics"
+        )
+
+    # 4. Week total / busiest day — fill to 4 if space
+    if len(bullets) < 4:
+        future_days = {d: evs for d, evs in by_day.items() if d >= today_date}
+        total = sum(len(evs) for evs in future_days.values())
+        if future_days:
+            busiest_day = max(future_days, key=lambda d: len(future_days[d]))
+            busiest_name = day_names[busiest_day.weekday()]
+            busiest_count = len(future_days[busiest_day])
+            bullets.append(
+                f"{total} events this week &mdash; busiest day is "
+                f"<strong>{busiest_name}</strong> with {busiest_count}"
+            )
+
+    return bullets[:4]
+
 # ─── EMAIL HTML BUILDER ───────────────────────────────────────────────────────
 
 def build_html(events, today, tz):
@@ -206,12 +273,6 @@ def build_html(events, today, tz):
     day_names  = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
 
     # Collect alerts
-    action_items = [
-        (item["start"], item["event"])
-        for day_evs in by_day.values()
-        for item in day_evs
-        if needs_decision(item["event"])
-    ]
     all_conflicts = [
         (day, a, b)
         for day, day_evs in by_day.items()
@@ -221,7 +282,7 @@ def build_html(events, today, tz):
         item
         for day_evs in by_day.values()
         for item in day_evs
-        if sutton_unavailable(item["event"])
+        if sutton_unavailable(item)
     ]
 
     html = f"""<!DOCTYPE html>
@@ -235,8 +296,10 @@ def build_html(events, today, tz):
   .hdr p{{margin:6px 0 0;opacity:.7;font-size:14px}}
   .sec{{padding:18px 28px;border-bottom:1px solid #f0f0f0}}
   .sec-title{{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#999;margin:0 0 12px}}
+  .summary{{background:#eef4fb;border-radius:8px;padding:14px 20px;margin:0}}
+  .summary ul{{margin:0;padding:0 0 0 18px;list-style:disc}}
+  .summary li{{font-size:14px;line-height:1.6;color:#333;margin-bottom:4px}}
   .alert{{border-left:4px solid #ff9800;background:#fff8e1;padding:10px 14px;border-radius:4px;margin-bottom:8px;font-size:14px;line-height:1.4}}
-  .alert.red{{border-color:#e53935;background:#ffeaea}}
   .day{{margin-bottom:18px}}
   .day-hdr{{font-size:15px;font-weight:700;color:#1a1a2e;padding:7px 0 5px;border-bottom:2px solid #eee;margin-bottom:6px}}
   .day-hdr.today-hdr{{color:#0d47a1}}
@@ -258,12 +321,17 @@ def build_html(events, today, tz):
   </div>
 """
 
-    # ── Alerts section ──────────────────────────────────────────────────────
-    if action_items or all_conflicts or sutton_away:
-        html += '<div class="sec"><p class="sec-title">🚨 Needs Attention</p>\n'
-        for start_dt, ev in sorted(action_items, key=lambda x: x[0]):
-            label = start_dt.strftime("%a %-d @ %-I:%M %p")
-            html += f'<div class="alert red">⚠️ <strong>{ev.get("summary","")}</strong> &mdash; {label}</div>\n'
+    # ── Quick Summary ────────────────────────────────────────────────────────
+    summary_bullets = build_summary_bullets(by_day, today_date, all_conflicts, sutton_away)
+    html += '<div class="sec"><p class="sec-title">📋 Quick Summary</p>\n'
+    html += '<div class="summary"><ul>\n'
+    for bullet in summary_bullets:
+        html += f'  <li>{bullet}</li>\n'
+    html += '</ul></div>\n</div>\n'
+
+    # ── Logistics Alerts ─────────────────────────────────────────────────────
+    if all_conflicts or sutton_away:
+        html += '<div class="sec"><p class="sec-title">🚗 Logistics Alerts</p>\n'
         for day, a, b in all_conflicts:
             label = day.strftime("%A %-d")
             html += (f'<div class="alert">🚗 <strong>Logistics gap {label}:</strong> '
