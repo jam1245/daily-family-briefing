@@ -41,6 +41,12 @@ In your repo on GitHub: **Settings → Secrets and variables → Actions → New
 |---|---|
 | `GOOGLE_TOKEN_JSON` | Printed by setup.py |
 | `GOOGLE_CREDENTIALS_JSON` | Printed by setup.py |
+| `BRIEFING_SENDER` | Gmail address that sends the briefing |
+| `BRIEFING_RECIPIENTS` | Comma-separated recipient addresses |
+| `JOHN_CALENDAR_ID` | Google Calendar ID for John (usually Gmail address) |
+| `SUTTON_CALENDAR_ID` | Google Calendar ID for Sutton (usually Gmail address) |
+
+See `.env.example` for the full list with descriptions.
 
 ### 4. Push and you're done
 
@@ -90,11 +96,10 @@ Or keep one cron and accept it shifts by an hour seasonally — totally fine for
 
 Edit `daily_briefing.py` and push a commit. The next run picks up your changes automatically.
 
-Common tweaks at the top of the file:
-- `RECIPIENTS` — who gets the email
-- `CALENDARS` — add or remove calendars by ID
-- `DECISION_KEYWORDS` — words that trigger urgent alerts
-- `SUTTON_UNAVAILABLE_KEYWORDS` — events that flag John to cover logistics
+Common tweaks:
+- `BRIEFING_RECIPIENTS` secret — who gets the email (comma-separated)
+- `CALENDARS` in `daily_briefing.py` — add or remove shared/import calendars by ID
+- `SUTTON_UNAVAILABLE_KEYWORDS` in `daily_briefing.py` — events that flag evening logistics
 
 ---
 

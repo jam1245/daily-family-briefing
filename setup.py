@@ -52,7 +52,7 @@ def authenticate():
     print("=" * 62)
     print("STEP 2 — Authorise Google access")
     print("=" * 62)
-    print("\nA browser window will open — sign in as johnmataya@gmail.com")
+    print("\nA browser window will open — sign in with your Google account")
     print("and grant Calendar (read) + Gmail (send) access.\n")
 
     flow  = InstalledAppFlow.from_client_secrets_file(str(creds_file), SCOPES)

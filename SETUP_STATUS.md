@@ -1,7 +1,7 @@
 # Daily Family Briefing — Setup Status
 
 ## What This Project Does
-A GitHub Actions workflow that emails **John (johnmataya@gmail.com)** and **Sutton (suttonmeagher@gmail.com)** every morning at **6:30 AM ET** with:
+A GitHub Actions workflow that emails **John and Sutton** every morning at **6:30 AM ET** with:
 - Today's full schedule + 7-day week view across all family calendars
 - Logistics conflict alerts (two kids needing rides at the same time)
 - Sutton-unavailable flags (UMD class Thursdays 8–10 PM → John covers evening)
@@ -75,7 +75,7 @@ python3 ~/GitHub/daily-family-briefing/setup.py
 This will:
 1. Install Python dependencies (`google-api-python-client`, `pytz`, etc.)
 2. Prompt you to download a `credentials.json` from Google Cloud Console (instructions printed)
-3. Open a browser → sign in as **johnmataya@gmail.com** → grant Calendar + Gmail access
+3. Open a browser → sign in with your Google account → grant Calendar + Gmail access
 4. Print two base64-encoded values to copy into GitHub Secrets (next step)
 
 ### Step 5 — Add Google credentials as GitHub Secrets
@@ -113,8 +113,8 @@ When setup.py asks for `credentials.json`:
 ## Calendars Being Monitored
 | Calendar | ID |
 |---|---|
-| John | johnmataya@gmail.com |
-| Sutton | suttonmeagher@gmail.com |
+| John | Set via `JOHN_CALENDAR_ID` GitHub Secret |
+| Sutton | Set via `SUTTON_CALENDAR_ID` GitHub Secret |
 | Family | family15193680876382494899@group.calendar.google.com |
 | Arlington Public Schools | 3r4onhtersmi5hjrmuhknrrls1gqe0vi@import.calendar.google.com |
 | All-Stars Baseball | 1iuoufcggph8urbobsgnfikspcmvcc5b@import.calendar.google.com |

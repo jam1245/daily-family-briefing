@@ -29,6 +29,10 @@ jobs:
 
       - name: Run daily briefing
         env:
-          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+          GOOGLE_TOKEN_JSON:       ${{ secrets.GOOGLE_TOKEN_JSON }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          BRIEFING_SENDER:         ${{ secrets.BRIEFING_SENDER }}
+          BRIEFING_RECIPIENTS:     ${{ secrets.BRIEFING_RECIPIENTS }}
+          JOHN_CALENDAR_ID:        ${{ secrets.JOHN_CALENDAR_ID }}
+          SUTTON_CALENDAR_ID:      ${{ secrets.SUTTON_CALENDAR_ID }}
         run: python daily_briefing.py

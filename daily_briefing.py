@@ -19,19 +19,41 @@ from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+# Load ~/.env for local development (optional — install python-dotenv to use)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path.home() / ".env")
+except ImportError:
+    pass
+
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
-TIMEZONE    = "America/New_York"
-SENDER      = "johnmataya@gmail.com"
-RECIPIENTS  = ["johnmataya@gmail.com", "suttonmeagher@gmail.com"]
+TIMEZONE = "America/New_York"
+
+
+def _require_env(name: str) -> str:
+    """Return an environment variable value or exit with a clear error message."""
+    val = os.environ.get(name, "").strip()
+    if not val:
+        print(f"ERROR: Required environment variable '{name}' is not set.")
+        print("  For local runs:       add it to ~/.env  (see .env.example)")
+        print("  For GitHub Actions:   add it as a GitHub Secret")
+        sys.exit(1)
+    return val
+
+
+SENDER     = _require_env("BRIEFING_SENDER")
+RECIPIENTS = [r.strip() for r in _require_env("BRIEFING_RECIPIENTS").split(",") if r.strip()]
+_JOHN_ID   = _require_env("JOHN_CALENDAR_ID")
+_SUTTON_ID = _require_env("SUTTON_CALENDAR_ID")
 
 CALENDARS = {
-    "John":               "johnmataya@gmail.com",
-    "Sutton":             "suttonmeagher@gmail.com",
+    "John":               _JOHN_ID,
+    "Sutton":             _SUTTON_ID,
     "Family":             "family15193680876382494899@group.calendar.google.com",
     "Arlington Schools":  "3r4onhtersmi5hjrmuhknrrls1gqe0vi@import.calendar.google.com",
     "All-Stars Baseball": "1iuoufcggph8urbobsgnfikspcmvcc5b@import.calendar.google.com",
