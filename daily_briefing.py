@@ -138,14 +138,34 @@ def get_week_events(service, days_ahead=7):
         except Exception as e:
             print(f"Warning: Could not fetch calendar '{cal_name}': {e}")
 
-    # Deduplicate by event ID, keep sorted by start time
-    seen, unique = set(), []
-    for e in sorted(
-        all_events,
-        key=lambda x: x.get("start", {}).get("dateTime", x.get("start", {}).get("date", ""))
-    ):
-        if e["id"] not in seen:
-            seen.add(e["id"])
+    # Sort by start time, then by calendar priority so the preferred version
+    # of any duplicate is always encountered first.
+    cal_priority = {"John": 0, "Family": 1, "Sutton": 2}
+    all_events.sort(key=lambda x: (
+        x.get("start", {}).get("dateTime", x.get("start", {}).get("date", "")),
+        cal_priority.get(x.get("_calendar", ""), 9),
+    ))
+
+    # Pass 1 — deduplicate by iCalUID (RFC5545 standard UID shared across
+    # calendar instances of the same real-world event; catches invitations
+    # that appear on both John's and Sutton's calendars via Google invite).
+    seen_uid, pass1 = set(), []
+    for e in all_events:
+        uid = e.get("iCalUID") or e["id"]
+        if uid not in seen_uid:
+            seen_uid.add(uid)
+            pass1.append(e)
+
+    # Pass 2 — deduplicate by normalised title + start minute (catches events
+    # entered independently on multiple calendars with different iCalUIDs,
+    # e.g. both John and Sutton each added "Brandon - John Drinks" separately).
+    seen_key, unique = set(), []
+    for e in pass1:
+        start_val = e.get("start", {}).get("dateTime") or e.get("start", {}).get("date", "")
+        title_key = re.sub(r"[^a-z0-9]", "", e.get("summary", "").lower())
+        dedup_key = (title_key, start_val[:16])   # minute-level precision
+        if dedup_key not in seen_key:
+            seen_key.add(dedup_key)
             unique.append(e)
 
     return unique, today, tz
