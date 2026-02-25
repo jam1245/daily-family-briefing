@@ -64,29 +64,11 @@ CALENDARS = {
 SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/gmail.readonly",   # inbox radar feature
 ]
 
 # Sutton events that mean John should cover evening logistics
 # Uses word-boundary regex so "work" won't match "workout"
 SUTTON_UNAVAILABLE_KEYWORDS = [r"\bumd\b", r"\bclass\b", r"\bwork\b", r"\bconference\b", r"\bmeeting\b"]
-
-# Keyword categories for inbox radar scoring — (emoji, [keywords])
-RADAR_CATEGORIES = [
-    ("🏫", ["school", "aps", "arlington", "student", "teacher", "principal",
-             "field trip", "dismissal", "pto", "homework", "grade", "classroom",
-             "lunch", "enrollment", "curriculum"]),
-    ("⚾", ["game", "practice", "tournament", "match", "baseball", "basketball",
-             "coach", "roster", "schedule", "scrimmage", "tryout", "sport",
-             "field", "uniform", "lineup"]),
-    ("📬", ["rsvp", "invitation", "invite", "birthday", "party", "playdate",
-             "gathering", "celebration", "join us"]),
-    ("⚠️", ["deadline", "due", "expires", "required", "action required",
-             "important", "sign", "permission slip", "waiver", "registration",
-             "payment", "overdue", "reminder", "urgent", "last chance"]),
-    ("🏥", ["appointment", "doctor", "dentist", "prescription", "health",
-             "clinic", "medical", "therapy", "vaccine"]),
-]
 
 # ─── AUTH: reads from env vars (GitHub Secrets) or local files ───────────────
 
@@ -304,145 +286,9 @@ def build_summary_bullets(by_day, today_date, all_conflicts, sutton_away):
 
     return bullets[:4]
 
-# ─── INBOX RADAR ──────────────────────────────────────────────────────────────
-
-def _header(msg: dict, name: str) -> str:
-    """Extract a named header value from a Gmail API message object."""
-    for h in msg.get("payload", {}).get("headers", []):
-        if h.get("name", "").lower() == name.lower():
-            return h.get("value", "")
-    return ""
-
-
-def _parse_sender_name(msg: dict) -> str:
-    """Return just the display name from the From header (strips email address)."""
-    from_val = _header(msg, "From")
-    if "<" in from_val:
-        name = from_val.split("<")[0].strip().strip('"')
-        return (name or from_val.split("<")[1].rstrip(">"))[:26]
-    return from_val.split("@")[0][:26]
-
-
-def _score_email(subject: str, snippet: str) -> tuple:
-    """
-    Score an email against RADAR_CATEGORIES.
-    Returns (best_emoji, score) — score=0 means not relevant.
-    """
-    text = (subject + " " + snippet).lower()
-    best_emoji, best_score = "📬", 0
-    for emoji, keywords in RADAR_CATEGORIES:
-        score = sum(1 for kw in keywords if kw in text)
-        if score > best_score:
-            best_score = score
-            best_emoji = emoji
-    return best_emoji, best_score
-
-
-def _parse_email_time(date_str: str, tz) -> str:
-    """Parse RFC 2822 date string → friendly local time like '8:42 AM'."""
-    try:
-        from email.utils import parsedate_to_datetime
-        return parsedate_to_datetime(date_str).astimezone(tz).strftime("%-I:%M %p")
-    except Exception:
-        return ""
-
-
-def _build_calendar_keywords(events: list) -> set:
-    """
-    Build a set of significant words from all calendar event summaries.
-    Used to suppress radar items that duplicate entries already on the calendar.
-    """
-    stop = {"the", "and", "for", "with", "at", "on", "in", "a", "an", "of", "to"}
-    words = set()
-    for ev in events:
-        for word in ev.get("summary", "").lower().split():
-            w = re.sub(r"[^a-z]", "", word)
-            if len(w) > 3 and w not in stop:
-                words.add(w)
-    return words
-
-
-def get_inbox_radar(gmail_svc, tz, calendar_keywords: set = None) -> list:
-    """
-    Scan the Primary inbox for emails from the last 24 hours that are
-    relevant to family logistics. Returns up to 8 scored items.
-    Fails gracefully — returns [] on any error so the briefing still sends.
-    """
-    if calendar_keywords is None:
-        calendar_keywords = set()
-    try:
-        result = gmail_svc.users().messages().list(
-            userId="me",
-            q="in:inbox category:primary newer_than:1d",
-            maxResults=30,
-        ).execute()
-        messages = result.get("messages", [])
-        items = []
-        for m in messages:
-            msg = gmail_svc.users().messages().get(
-                userId="me",
-                id=m["id"],
-                format="metadata",
-                metadataHeaders=["Subject", "From", "Date"],
-            ).execute()
-            subject  = _header(msg, "Subject") or "(No subject)"
-            sender   = _parse_sender_name(msg)
-            date_str = _header(msg, "Date")
-            snippet  = msg.get("snippet", "")
-
-            # Skip emails that duplicate something already on the calendar
-            if calendar_keywords:
-                subject_words = set(re.sub(r"[^a-z ]", "", subject.lower()).split())
-                if len(subject_words & calendar_keywords) >= 2:
-                    continue
-
-            emoji, score = _score_email(subject, snippet)
-            if score == 0:
-                continue
-
-            items.append({
-                "emoji":   emoji,
-                "sender":  sender,
-                "subject": subject,
-                "time":    _parse_email_time(date_str, tz),
-                "score":   score,
-            })
-
-        items.sort(key=lambda x: x["score"], reverse=True)
-        return items[:8]
-
-    except Exception as exc:
-        err = str(exc)
-        if "insufficientPermissions" in err or "403" in err:
-            print("⚠️  Gmail read permission not granted for inbox radar.")
-            print("   Delete token.json and re-run setup.py to add the gmail.readonly scope.")
-        else:
-            print(f"⚠️  Inbox radar scan failed: {exc}")
-        return []
-
-
-def build_radar_html(radar_items: list) -> str:
-    """Build the HTML for the 📬 On Your Radar section."""
-    html = '<div class="sec"><p class="sec-title">📬 On Your Radar</p>\n'
-    for item in radar_items:
-        subj = item["subject"]
-        if len(subj) > 70:
-            subj = subj[:70] + "…"
-        html += (
-            f'<div class="radar-row">'
-            f'<span class="radar-emoji">{item["emoji"]}</span>'
-            f'<span class="radar-sender">{item["sender"]}</span>'
-            f'<span class="radar-subject">{subj}</span>'
-            f'<span class="radar-time">{item["time"]}</span>'
-            f'</div>\n'
-        )
-    html += '</div>\n'
-    return html
-
-
 # ─── EMAIL HTML BUILDER ───────────────────────────────────────────────────────
 
-def build_html(events, today, tz, radar_items=None):
+def build_html(events, today, tz):
     by_day     = group_by_day(events, tz)
     today_date = today.date()
     today_str  = today.strftime("%A, %B %-d, %Y")
@@ -485,11 +331,6 @@ def build_html(events, today, tz, radar_items=None):
   .ev-title{{font-weight:500}}
   .ev-meta{{font-size:12px;color:#aaa;margin-top:2px}}
   .conflict-note{{background:#fff0f0;border:1px solid #ffcdd2;border-radius:5px;padding:8px 12px;margin-top:6px;font-size:13px}}
-  .radar-row{{display:flex;gap:10px;padding:6px 0;font-size:13px;border-bottom:1px solid #f5f5f5;align-items:baseline}}
-  .radar-emoji{{width:22px;flex-shrink:0;text-align:center}}
-  .radar-sender{{font-weight:600;min-width:100px;max-width:100px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#333}}
-  .radar-subject{{flex:1;color:#555;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}}
-  .radar-time{{color:#aaa;font-size:12px;white-space:nowrap;padding-left:8px}}
   .ftr{{padding:14px 28px;font-size:12px;color:#bbb;text-align:center}}
   a{{color:#1a1a2e}}
 </style>
@@ -509,10 +350,6 @@ def build_html(events, today, tz, radar_items=None):
     for bullet in summary_bullets:
         html += f'  <li>{bullet}</li>\n'
     html += '</ul></div>\n</div>\n'
-
-    # ── Inbox Radar ──────────────────────────────────────────────────────────
-    if radar_items:
-        html += build_radar_html(radar_items)
 
     # ── Logistics Alerts ─────────────────────────────────────────────────────
     if all_conflicts or sutton_away:
@@ -613,14 +450,9 @@ def main():
     events, today, tz = get_week_events(cal_svc, days_ahead=7)
     print(f"   {len(events)} events found across all calendars")
 
-    print("📬 Scanning inbox for radar items...")
-    cal_keywords = _build_calendar_keywords(events)
-    radar_items  = get_inbox_radar(gmail_svc, tz, calendar_keywords=cal_keywords)
-    print(f"   {len(radar_items)} relevant email(s) found")
-
     print("✉️  Building email...")
     subject  = f"📅 Daily Briefing — {today.strftime('%A, %B %-d')}"
-    html     = build_html(events, today, tz, radar_items=radar_items)
+    html     = build_html(events, today, tz)
 
     print(f"📤 Sending to {', '.join(RECIPIENTS)}...")
     result = send_email(gmail_svc, subject, html, RECIPIENTS, SENDER)
