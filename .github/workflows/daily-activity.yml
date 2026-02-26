@@ -1,0 +1,82 @@
+name: Daily Activity Commit
+
+# Keeps the GitHub contribution graph active by committing a daily
+# activity log entry every morning. Uses the built-in GITHUB_TOKEN
+# so no extra secrets are required.
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 7:00 AM EST daily
+  workflow_dispatch:        # Allow manual trigger from GitHub Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  daily-activity:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Step 2: Update the activity log with today's entry
+      - name: Update activity log
+        run: |
+          python3 - <<'EOF'
+          import os
+          from datetime import datetime, timezone
+
+          now = datetime.now(timezone.utc)
+          date_str  = now.strftime("%Y-%m-%d")
+          time_str  = now.strftime("%H:%M UTC")
+          month_str = now.strftime("%B %Y")
+
+          log_file = "activity_log.md"
+          new_entry = f"| {date_str} | {time_str} | Daily briefing scheduled | ✅ Active |\n"
+
+          if not os.path.exists(log_file):
+              header = (
+                  "# 📋 Daily Family Briefing — Activity Log\n\n"
+                  "Automated log confirming the daily briefing pipeline is healthy.\n"
+                  "Updated every morning by GitHub Actions.\n\n"
+                  "| Date | Time (UTC) | Event | Status |\n"
+                  "|------|------------|-------|--------|\n"
+              )
+              with open(log_file, "w") as f:
+                  f.write(header)
+
+          with open(log_file, "a") as f:
+              f.write(new_entry)
+
+          print(f"Activity log updated → {new_entry.strip()}")
+          EOF
+
+      # Step 3: Configure git with actor identity so commits count on the
+      #         contribution graph (GitHub's noreply email format).
+      - name: Configure Git
+        run: |
+          git config --local user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git config --local user.name "${{ github.actor }}"
+
+      # Step 4: Commit the updated log
+      - name: Commit activity log
+        run: |
+          git add activity_log.md
+          git diff --cached --quiet || \
+            git commit -m "📅 Daily activity — $(date -u '+%Y-%m-%d')" \
+              -m "Automated daily commit to keep contribution graph active."
+
+      # Step 5: Push to main
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.8.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+
+      - name: Report success
+        if: success()
+        run: echo "✅ Daily activity committed and pushed — $(date -u '+%Y-%m-%d %H:%M UTC')"
