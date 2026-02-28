@@ -9,6 +9,28 @@ Both run in the cloud. Your computer does not need to be on.
 
 ---
 
+## Why We Built This
+
+Modern family life generates a constant stream of scheduling information — but it arrives scattered across email, text messages, school apps, sports league newsletters, and group chats. Someone has to read all of it, decide what matters, and manually key it into a shared calendar. Then remember to tell everyone else. Then hope nobody double-booked Saturday.
+
+The breaking point tends to look like this:
+
+- A school sends a PDF with the semester's important dates — Bradford Awards Banquet, final exams, spring break, term transitions — buried in a long email with fifteen other announcements
+- A sports coach texts the group chat: *"Spring hitting sessions start Wednesday, 6–7 PM, Corobus Sports, every Wednesday and Thursday through March 19"*
+- A parent screenshots both, means to add them to the calendar, gets interrupted, and by Thursday nobody knows if practice is happening
+
+The result is a family calendar that's always slightly out of date, a recurring "wait, did you add that?" conversation, and at least one missed event a month.
+
+**This project automates the parts that shouldn't require human attention:**
+
+- Every morning, one email summarizes the entire week across every calendar — no need to open Google Calendar, no need to mentally aggregate five sources
+- When a scheduling email or text comes in, you screenshot it or read it aloud into Telegram — the AI extracts the event details, confirms them with you, and adds it to the calendar in seconds
+- If two kids need to be in different places at the same time, the morning email flags it before the day starts, not while you're already in the car
+
+The goal is a household where the calendar stays current without anyone having to sit down and maintain it.
+
+---
+
 ## What It Does
 
 ### Morning Email
