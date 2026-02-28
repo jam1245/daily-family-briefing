@@ -62,8 +62,9 @@ CALENDARS = {
 }
 
 SCOPES = [
-    "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/calendar",          # read + write (bot writes; briefing only reads)
+    "https://www.googleapis.com/auth/gmail.send",        # briefing sends email
+    "https://www.googleapis.com/auth/cloud-platform",    # Speech-to-Text for voice messages
 ]
 
 # Sutton events that mean John should cover evening logistics

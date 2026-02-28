@@ -35,6 +35,12 @@ briefing.log
 .AppleDouble
 .LSOverride
 
+# ─── Cloudflare Wrangler cache — contains account ID ─────────────────────────
+telegram-bot/.wrangler/
+
+# ─── Claude Code session data — may contain token history ────────────────────
+.claude/
+
 # ─── IDEs ─────────────────────────────────────────────────────────────────────
 .idea/
 .vscode/

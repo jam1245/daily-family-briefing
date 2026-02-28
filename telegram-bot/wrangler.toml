@@ -1,0 +1,16 @@
+name = "family-calendar-bot"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# KV namespace for conversation state + token caching
+# Run: wrangler kv:namespace create FAMILY_BOT_KV
+# Then paste the resulting id below
+[[kv_namespaces]]
+binding = "KV"
+id = "c11e97c2436d4267b7863fe2723cd42b"
+
+# Non-secret config
+[vars]
+TIMEZONE = "America/New_York"
+# JOHN_EMAIL is stored as a Cloudflare secret (wrangler secret put JOHN_EMAIL)
+# SUTTON_CALENDAR_ID is stored as a Cloudflare secret
