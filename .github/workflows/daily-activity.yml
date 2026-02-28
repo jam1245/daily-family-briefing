@@ -70,12 +70,12 @@ jobs:
             git commit -m "📅 Daily activity — $(date -u '+%Y-%m-%d')" \
               -m "Automated daily commit to keep contribution graph active."
 
-      # Step 5: Push to main
+      # Step 5: Pull any remote changes then push — handles the case where
+      #         another commit landed on main between checkout and now.
       - name: Push changes
-        uses: ad-m/github-push-action@v0.8.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: main
+        run: |
+          git pull --rebase origin main
+          git push origin main
 
       - name: Report success
         if: success()
