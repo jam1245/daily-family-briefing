@@ -12,7 +12,7 @@ SCRIPT_DIR = Path(__file__).parent
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",          # read + write (briefing reads, bot writes)
     "https://www.googleapis.com/auth/gmail.send",        # briefing sends email
-    "https://www.googleapis.com/auth/cloud-platform",    # Speech-to-Text for voice messages
+    # cloud-platform (Speech-to-Text) removed — voice transcription now uses OpenAI Whisper
 ]
 
 def install_deps():
@@ -33,7 +33,6 @@ def check_credentials():
   3. APIs & Services → Enable APIs → enable:
        • Google Calendar API
        • Gmail API
-       • Cloud Speech-to-Text API  ← new (for voice messages in Telegram bot)
   4. APIs & Services → Credentials → + Create Credentials
        → OAuth client ID → Desktop app → name it anything
   5. Download JSON → rename to credentials.json
@@ -55,7 +54,7 @@ def authenticate():
     print("STEP 2 — Authorise Google access")
     print("=" * 62)
     print("\nA browser window will open — sign in with your Google account")
-    print("and grant Calendar (read+write) + Gmail (send) + Speech-to-Text access.\n")
+    print("and grant Calendar (read+write) + Gmail (send) access.\n")
 
     flow  = InstalledAppFlow.from_client_secrets_file(str(creds_file), SCOPES)
     creds = flow.run_local_server(port=0)
