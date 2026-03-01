@@ -3,7 +3,7 @@
  *
  * Features:
  *  📸  Screenshot / image  → Claude Vision → extract event
- *  🎤  Voice message       → Google Speech-to-Text → Claude → extract event
+ *  🎤  Voice message       → OpenAI Whisper → Claude → extract event
  *  💬  Typed text          → Claude → extract event or cancellation
  *  ✅  Inline confirm / ❌ cancel / ✏️ edit buttons
  *  ↩️  "undo" within 60 seconds of creation
@@ -18,6 +18,7 @@
  *   TELEGRAM_BOT_TOKEN      — from @BotFather
  *   ALLOWED_USER_IDS        — comma-separated Telegram user IDs (John, Sutton)
  *   ANTHROPIC_API_KEY       — for Claude vision + understanding
+ *   OPENAI_API_KEY          — for Whisper voice transcription
  *   GOOGLE_TOKEN_JSON       — base64-encoded token.json (same as GitHub Secret)
  *   GOOGLE_CREDENTIALS_JSON — base64-encoded credentials.json (same as GitHub Secret)
  *   SUTTON_CALENDAR_ID      — Sutton's Google Calendar ID
@@ -25,11 +26,11 @@
  * KV namespace binding: KV  (stores token cache, pending events, undo state)
  */
 
-const TELEGRAM_API  = 'https://api.telegram.org/bot';
-const CLAUDE_API    = 'https://api.anthropic.com/v1/messages';
+const TELEGRAM_API     = 'https://api.telegram.org/bot';
+const CLAUDE_API       = 'https://api.anthropic.com/v1/messages';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const CALENDAR_API  = 'https://www.googleapis.com/calendar/v3';
-const SPEECH_API    = 'https://speech.googleapis.com/v1/speech:recognize';
+const CALENDAR_API     = 'https://www.googleapis.com/calendar/v3';
+const WHISPER_API      = 'https://api.openai.com/v1/audio/transcriptions';
 
 // ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
 
@@ -145,30 +146,23 @@ async function processPhoto(chatId, message, senderName, env) {
 async function processVoice(chatId, message, senderName, env) {
   await sendMessage(chatId, '🎤 Transcribing…', env);
 
-  const fileUrl    = await getTelegramFileUrl(message.voice.file_id, env);
-  const audioBuf   = await (await fetch(fileUrl)).arrayBuffer();
-  const b64Audio   = bufferToBase64(audioBuf);
-  const accessToken = await getGoogleAccessToken(env);
+  const fileUrl  = await getTelegramFileUrl(message.voice.file_id, env);
+  const audioBuf = await (await fetch(fileUrl)).arrayBuffer();
 
-  const speechRes = await fetch(SPEECH_API, {
+  // Whisper accepts OGG/Opus (Telegram's native voice format) via multipart upload
+  const formData = new FormData();
+  formData.append('file', new Blob([audioBuf], { type: 'audio/ogg' }), 'voice.ogg');
+  formData.append('model', 'whisper-1');
+  formData.append('language', 'en');
+
+  const whisperRes = await fetch(WHISPER_API, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      config: {
-        encoding: 'OGG_OPUS',
-        sampleRateHertz: 48000,
-        languageCode: 'en-US',
-        model: 'latest_long',
-      },
-      audio: { content: b64Audio },
-    }),
+    headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+    body: formData,
   });
 
-  const speechData = await speechRes.json();
-  const transcript = speechData.results?.[0]?.alternatives?.[0]?.transcript;
+  const whisperData = await whisperRes.json();
+  const transcript  = whisperData.text?.trim();
 
   if (!transcript) {
     await sendMessage(chatId, "🎤 Couldn't catch that — try again or type it out?", env);
