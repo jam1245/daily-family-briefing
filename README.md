@@ -51,6 +51,8 @@ From any phone, in a shared group chat:
 - **Cancellation detection** — "Practice Saturday is cancelled" → bot finds and offers to delete it
 - **Edit before confirming** — tap ✏️ to fix anything before it's saved
 
+<img src="docs/telegram-bot-demo.png" alt="Telegram bot demo — typing an event and getting confirmation" width="320">
+
 ---
 
 ## Architecture
@@ -68,7 +70,7 @@ From any phone, in a shared group chat:
 │  Telegram (free) ←→ Cloudflare Worker (free)           │
 │                         ↓                              │
 │              Claude API (AI vision + text)             │
-│              Google Speech-to-Text (voice)             │
+│              OpenAI Whisper (voice transcription)      │
 │                         ↓                              │
 │              Google Calendar API (create event)        │
 └─────────────────────────────────────────────────────────┘
@@ -81,7 +83,7 @@ From any phone, in a shared group chat:
 | GitHub Actions | Runs the morning email on a schedule | Free |
 | Google Calendar API | Reads and writes calendar events | Free |
 | Gmail API | Sends the morning email | Free |
-| Google Speech-to-Text | Transcribes voice messages | ~$0.04/month |
+| OpenAI Whisper | Transcribes voice messages | ~$0.006/min |
 | Cloudflare Workers | Hosts the Telegram bot webhook | Free |
 | Telegram | Chat interface for the bot | Free |
 | Anthropic Claude API | Reads screenshots, understands text | ~$0.10/month |
@@ -97,6 +99,7 @@ Create free accounts at these services — it takes about 20 minutes total:
 - [**Cloudflare**](https://cloudflare.com) — hosts the Telegram bot
 - [**Telegram**](https://telegram.org) — the chat app your family uses to add events
 - [**Anthropic**](https://console.anthropic.com) — Claude API for AI understanding of screenshots and text
+- [**OpenAI**](https://platform.openai.com) — Whisper API for voice transcription
 
 ---
 
@@ -106,10 +109,9 @@ Create free accounts at these services — it takes about 20 minutes total:
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com)
 2. Click the project dropdown (top left) → **New Project** → name it `Family Briefing` → Create
-3. Go to **APIs & Services → Library** and enable these three APIs:
+3. Go to **APIs & Services → Library** and enable these APIs:
    - **Google Calendar API**
    - **Gmail API**
-   - **Cloud Speech-to-Text API**
 4. Go to **APIs & Services → Credentials → + Create Credentials → OAuth client ID**
    - Application type: **Desktop app**
    - Name: anything (e.g. `Family Briefing`)
@@ -130,7 +132,7 @@ python3 setup.py
 This will:
 - Install Python dependencies automatically
 - Open a browser → sign in with the Google account that owns your calendars
-- Grant Calendar, Gmail, and Speech-to-Text access
+- Grant Calendar and Gmail access
 - Print two long base64 strings: `GOOGLE_TOKEN_JSON` and `GOOGLE_CREDENTIALS_JSON`
 
 **Save both values** — you'll need them in the next step and again for the Telegram bot.
@@ -255,6 +257,7 @@ cd telegram-bot
 printf '%s' 'YOUR_BOT_TOKEN'      | wrangler secret put TELEGRAM_BOT_TOKEN
 printf '%s' 'ID1,ID2'             | wrangler secret put ALLOWED_USER_IDS
 printf '%s' 'YOUR_ANTHROPIC_KEY'  | wrangler secret put ANTHROPIC_API_KEY
+printf '%s' 'YOUR_OPENAI_KEY'     | wrangler secret put OPENAI_API_KEY
 printf '%s' 'YOUR_TOKEN_JSON_B64' | wrangler secret put GOOGLE_TOKEN_JSON
 printf '%s' 'YOUR_CREDS_JSON_B64' | wrangler secret put GOOGLE_CREDENTIALS_JSON
 printf '%s' 'calendar@gmail.com'  | wrangler secret put SUTTON_CALENDAR_ID
@@ -265,6 +268,7 @@ printf '%s' 'calendar@gmail.com'  | wrangler secret put SUTTON_CALENDAR_ID
 | `TELEGRAM_BOT_TOKEN` | From @BotFather |
 | `ALLOWED_USER_IDS` | Comma-separated Telegram user IDs for all family members |
 | `ANTHROPIC_API_KEY` | From console.anthropic.com |
+| `OPENAI_API_KEY` | From platform.openai.com — used for Whisper voice transcription |
 | `GOOGLE_TOKEN_JSON` | The base64 value printed by `setup.py` |
 | `GOOGLE_CREDENTIALS_JSON` | The base64 value printed by `setup.py` |
 | `SUTTON_CALENDAR_ID` | Google Calendar ID for the calendar events are added to |
@@ -441,5 +445,5 @@ wrangler deploy
 - Check that `SUTTON_CALENDAR_ID` matches exactly what's shown in Google Calendar settings
 
 **Voice messages not working**
-- Make sure **Cloud Speech-to-Text API** is enabled in Google Cloud Console
-- Make sure you re-ran `setup.py` after enabling it (the token needs the new scope)
+- Make sure `OPENAI_API_KEY` is set as a Cloudflare secret: `wrangler secret put OPENAI_API_KEY`
+- Confirm the key is valid at [platform.openai.com](https://platform.openai.com/api-keys)
