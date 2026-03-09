@@ -1,10 +1,10 @@
 name: Daily Family Briefing
 
 on:
-  # Runs at 11:30 AM UTC = 6:30 AM EST (Nov–Mar)
-  # Change to 10:30 AM UTC (1030) when Daylight Saving Time starts in March
+  # Runs at 10:30 AM UTC = 6:30 AM EDT (Mar–Nov)
+  # Change to 11:30 AM UTC (1130) when Daylight Saving Time ends in November
   schedule:
-    - cron: "30 11 * * *"
+    - cron: "30 10 * * *"
 
   # Allow manual trigger from the GitHub Actions tab (useful for testing)
   workflow_dispatch:
