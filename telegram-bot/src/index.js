@@ -662,6 +662,11 @@ async function createCalendarEvent(event, env) {
       body:    JSON.stringify(body),
     }
   );
+  if (!res.ok) {
+    const error = await res.json();
+    console.error('Google Calendar API error:', res.status, error);
+    throw new Error(`Failed to create event: ${error.error?.message || res.statusText}`);
+  }
   const created = await res.json();
   return created.id ? created : null;
 }
@@ -686,6 +691,9 @@ async function getGoogleAccessToken(env) {
   const cached = await env.KV.get('google_access_token', 'json');
   if (cached && cached.expiry > Date.now() + 30_000) return cached.token;
 
+  if (!env.GOOGLE_TOKEN_JSON || !env.GOOGLE_CREDENTIALS_JSON) {
+    throw new Error('Missing required Google credential secrets: GOOGLE_TOKEN_JSON and/or GOOGLE_CREDENTIALS_JSON');
+  }
   // Decode stored credentials (base64-encoded, same format as GitHub Secrets)
   const tokenData = JSON.parse(atob(env.GOOGLE_TOKEN_JSON));
   const credsData = JSON.parse(atob(env.GOOGLE_CREDENTIALS_JSON));
