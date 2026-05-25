@@ -97,3 +97,4 @@ Updated every morning by GitHub Actions.
 | 2026-05-22 | 14:40 UTC | Daily briefing scheduled | ✅ Active |
 | 2026-05-23 | 13:26 UTC | Daily briefing scheduled | ✅ Active |
 | 2026-05-24 | 13:27 UTC | Daily briefing scheduled | ✅ Active |
+| 2026-05-25 | 14:54 UTC | Daily briefing scheduled | ✅ Active |
